@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Invoice{% endblock %} - {{ shop[0] }}</title>
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#f3f4f6; --card:#fff;
+          --brand:#1e3a8a; --brand-ink:#fff; --danger:#b91c1c; --ok:#047857; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--brand); color:var(--brand-ink); padding:10px 20px; display:flex; align-items:center; gap:24px; }
+  header .shop { font-weight:700; font-size:18px; margin-right:auto; }
+  header a { color:var(--brand-ink); text-decoration:none; padding:6px 12px; border-radius:6px; }
+  header a:hover, header a.on { background:rgba(255,255,255,.15); }
+  main { max-width:1000px; margin:20px auto; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 20px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; text-transform:uppercase; letter-spacing:.04em; }
+  input { font:inherit; padding:7px 9px; border:1px solid #cbd5e1; border-radius:6px; width:100%; background:#fff; }
+  input:focus { outline:2px solid #93c5fd; border-color:#60a5fa; }
+  input:disabled { background:#f9fafb; color:var(--ink); }
+  button, .btn { font:inherit; padding:8px 16px; border:1px solid #cbd5e1; border-radius:6px; background:#fff;
+                 color:var(--ink); cursor:pointer; text-decoration:none; display:inline-block; }
+  button:hover, .btn:hover { background:#f9fafb; border-color:#94a3b8; }
+  .primary { background:var(--brand); border-color:var(--brand); color:var(--brand-ink); }
+  .primary:hover { background:#1e40af; }
+  .danger { color:var(--danger); border-color:#fca5a5; }
+  .small { padding:4px 10px; font-size:13px; }
+  .num { text-align:right; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;
+       border-bottom:2px solid var(--line); padding:8px 6px; }
+  td { border-bottom:1px solid var(--line); padding:6px; vertical-align:middle; }
+  th.num { text-align:right; }
+  .badge { background:#fee2e2; color:var(--danger); font-weight:700; padding:4px 12px; border-radius:999px; font-size:13px; }
+  #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
+           padding:10px 18px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+  #toast.err { background:var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <span class="shop">{{ shop[0] }}</span>
+  <a href="/" class="{{ 'on' if request.path == '/' }}">+ New Invoice</a>
+  <a href="/history" class="{{ 'on' if request.path == '/history' }}">Invoice History</a>
+</header>
+<main>{% block body %}{% endblock %}</main>
+<div id="toast"></div>
+<script>
+  function toast(msg, err) {
+    const t = document.getElementById("toast");
+    t.textContent = msg; t.className = "show" + (err ? " err" : "");
+    clearTimeout(t._h); t._h = setTimeout(() => t.className = "", err ? 4000 : 2000);
+  }
+  // Print a page without leaving this one: load it in a hidden frame; the print page calls print() itself.
+  function printUrl(url) {
+    let f = document.getElementById("printFrame");
+    if (!f) {
+      f = document.createElement("iframe");
+      f.id = "printFrame";
+      f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+      document.body.appendChild(f);
+    }
+    f.src = url + "?t=" + Date.now();
+  }
+</script>
+{% block script %}{% endblock %}
+</body>
+</html>

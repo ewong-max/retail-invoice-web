@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{ inv.inv_no }}</title>
+<style>
+  @page { size:A4; margin:18mm 20mm; }
+  body { font:11pt Arial, Helvetica, sans-serif; color:#000; margin:0; }
+  .top { display:flex; justify-content:space-between; }
+  .shop { font-size:18pt; font-weight:bold; }
+  .addr { font-size:9pt; }
+  h1 { margin:0; font-size:20pt; text-align:right; }
+  .meta { text-align:right; }
+  .cust { font-weight:bold; margin:24px 0 10px; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; border-top:1px solid #000; border-bottom:1px solid #000; padding:5px 4px; }
+  td { padding:4px; }
+  .num { text-align:right; }
+  tfoot td { border-top:1px solid #000; font-weight:bold; font-size:13pt; padding-top:8px; }
+  thead { display:table-header-group; }   /* repeat header on each printed page */
+  tfoot { display:table-row-group; }      /* but print the total only once, at the end */
+  tr { page-break-inside:avoid; }
+  .thanks { text-align:center; font-style:italic; font-size:9pt; margin-top:40px; }
+  .void { position:fixed; top:40%; left:0; right:0; text-align:center; font-size:80pt; font-weight:bold;
+          color:rgba(255,0,0,.25); transform:rotate(-35deg); }
+</style>
+</head>
+<body>
+{% if inv.status == 'CANCELLED' %}<div class="void">CANCELLED</div>{% endif %}
+<div class="top">
+  <div>
+    <div class="shop">{{ shop[0] }}</div>
+    {% for line in shop[1:] %}<div class="addr">{{ line }}</div>{% endfor %}
+  </div>
+  <div class="meta">
+    <h1>INVOICE</h1>
+    <div>No: {{ inv.inv_no }}</div>
+    <div>Date: {{ inv.inv_date|dmy }}</div>
+  </div>
+</div>
+<div class="cust">Customer: {{ inv.customer }}</div>
+<table>
+  <thead><tr><th>No</th><th>Item</th><th class="num">Qty</th><th class="num">Price ({{ currency }})</th>
+    <th class="num">Amount ({{ currency }})</th></tr></thead>
+  <tbody>
+  {% for it in inv["items"] %}
+    <tr><td>{{ loop.index }}</td><td>{{ it.description }}</td><td class="num">{{ it.qty|qty }}</td>
+      <td class="num">{{ it.price|money }}</td><td class="num">{{ (it.qty * it.price)|money }}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><td colspan="3"></td><td class="num">TOTAL</td><td class="num">{{ currency }} {{ inv.total|money }}</td></tr></tfoot>
+</table>
+<div class="thanks">Thank you for your purchase!</div>
+<script>window.onload = () => { window.focus(); window.print(); };</script>
+</body>
+</html>

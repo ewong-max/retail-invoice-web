@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}{{ inv.inv_no or "New Invoice" }}{% endblock %}
+{% block body %}
+<style>
+  .head { display:grid; grid-template-columns:200px 170px 1fr auto; gap:16px; align-items:end; margin-bottom:18px; }
+  .invno { font-size:20px; font-weight:700; padding:4px 0; }
+  .items td input { border-color:transparent; }
+  .items td input:hover:not(:disabled) { border-color:#cbd5e1; }
+  .items td:first-child { width:36px; color:var(--muted); text-align:center; }
+  .items .qty { width:90px; } .items .price { width:130px; } .items .amt { width:120px; font-variant-numeric:tabular-nums; }
+  .del { border:0; background:none; color:var(--muted); font-size:16px; padding:4px 8px; }
+  .del:hover { color:var(--danger); background:#fee2e2; }
+  .del:disabled, #addRow:disabled { visibility:hidden; }
+  .foot { display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+  .total { font-size:24px; font-weight:700; }
+  .actions { display:flex; gap:10px; margin-top:16px; }
+  @media (max-width:700px) { .head { grid-template-columns:1fr 1fr; } }
+</style>
+
+<div class="card">
+  <div class="head">
+    <div><label>Invoice No</label><div class="invno" id="invno"></div></div>
+    <div><label for="date">Date</label><input type="date" id="date"></div>
+    <div><label for="customer">Customer</label><input id="customer" autocomplete="off"></div>
+    <div><span class="badge" id="badge" hidden>CANCELLED</span></div>
+  </div>
+
+  <table class="items">
+    <thead><tr><th>#</th><th>Item</th><th class="num">Qty</th><th class="num">Unit price ({{ currency }})</th>
+      <th class="num">Amount</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <div class="foot">
+    <button id="addRow" class="small">+ Add item</button>
+    <div class="total">TOTAL: {{ currency }} <span id="total">0.00</span></div>
+  </div>
+</div>
+
+<div class="actions">
+  <button onclick="newInvoice()">New Invoice</button>
+  <button class="primary" onclick="save()">Save</button>
+  <button onclick="printInvoice()">Print</button>
+  <button onclick="exportPdf()">Export PDF</button>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+let inv = {{ inv|tojson }};
+let dirty = false;
+const $ = id => document.getElementById(id);
+const locked = () => inv.status === "CANCELLED";
+const num = v => { const n = parseFloat(String(v).replace(/,/g, "")); return isNaN(n) ? 0 : n; };
+const fmt = n => n.toLocaleString("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const blankRow = () => ({ description: "", qty: 1, price: "" });
+
+function render() {
+  $("invno").textContent = inv.inv_no || "(new)";
+  $("date").value = inv.inv_date;
+  $("customer").value = inv.customer;
+  $("badge").hidden = !locked();
+  if (!inv.items.length && !locked()) inv.items.push(blankRow());
+  renderRows();
+  document.querySelectorAll("input, #addRow, .del").forEach(el => el.disabled = locked());
+  document.title = (inv.inv_no || "New Invoice") + " - " + {{ shop[0]|tojson }};
+}
+
+function renderRows() {
+  const tb = $("rows");
+  tb.innerHTML = "";
+  inv.items.forEach((it, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${i + 1}</td><td><input class="d" placeholder="Item name"></td>
+      <td class="qty"><input class="q num" inputmode="decimal"></td>
+      <td class="price"><input class="p num" inputmode="decimal" placeholder="0.00"></td>
+      <td class="num amt"></td><td><button class="del" title="Remove item">&#10005;</button></td>`;
+    const [d, q, p] = tr.querySelectorAll("input");
+    d.value = it.description; q.value = it.qty;
+    p.value = typeof it.price === "number" ? it.price.toFixed(2) : it.price;
+    d.oninput = () => { it.description = d.value; changed(); };
+    q.oninput = () => { it.qty = q.value; changed(); };
+    p.oninput = () => { it.price = p.value; changed(); };
+    // Enter on the last row adds a new row
+    [d, q, p].forEach(el => el.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); if (i === inv.items.length - 1) addRow(); else tb.rows[i + 1].querySelector("input").focus(); }
+    });
+    tr.querySelector(".del").onclick = () => {
+      inv.items.splice(i, 1);
+      if (!inv.items.length) inv.items.push(blankRow());
+      changed(); renderRows();
+    };
+    tb.appendChild(tr);
+  });
+  updateTotals();
+}
+
+function updateTotals() {
+  let total = 0;
+  inv.items.forEach((it, i) => {
+    const amt = num(it.qty) * num(it.price);
+    total += amt;
+    $("rows").rows[i].querySelector(".amt").textContent = String(it.price).trim() ? fmt(amt) : "";
+  });
+  $("total").textContent = fmt(total);
+}
+
+function changed() { dirty = true; updateTotals(); }
+
+function addRow() {
+  inv.items.push(blankRow());
+  renderRows();
+  $("rows").rows[inv.items.length - 1].querySelector("input").focus();
+}
+$("addRow").onclick = addRow;
+$("date").oninput = () => { inv.inv_date = $("date").value; dirty = true; };
+$("customer").oninput = () => { inv.customer = $("customer").value; dirty = true; };
+
+async function save(quiet) {
+  if (locked()) { toast("This invoice is cancelled and cannot be changed.", true); return false; }
+  // ignore completely empty rows
+  const items = inv.items.filter(it => String(it.description).trim() || String(it.price).trim());
+  if (!$("date").value) { toast("Please enter a valid date.", true); return false; }
+  if (!items.length) { toast("Please add at least one item.", true); return false; }
+  for (const it of items) {
+    if (!String(it.description).trim() || !(num(it.qty) > 0) || isNaN(parseFloat(String(it.price).replace(/,/g, ""))) || num(it.price) < 0) {
+      toast("Each item needs a name, a quantity above 0 and a price.", true); return false;
+    }
+  }
+  const body = {
+    id: inv.id, inv_date: $("date").value, customer: $("customer").value,
+    items: items.map(it => ({ description: String(it.description).trim(), qty: num(it.qty), price: num(it.price) })),
+  };
+  const r = await fetch("/api/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await r.json();
+  if (!r.ok) { toast(res.error, true); return false; }
+  inv = res.invoice;
+  dirty = false;
+  history.replaceState(null, "", "/invoice/" + inv.id);
+  render();
+  if (!quiet) toast("Invoice " + inv.inv_no + " saved.");
+  return true;
+}
+
+// Save first (unless cancelled - then just reprint as is)
+async function ready() { return locked() || await save(true); }
+
+async function printInvoice() { if (await ready()) printUrl("/invoice/" + inv.id + "/print"); }
+async function exportPdf()    { if (await ready()) location.href = "/invoice/" + inv.id + "/pdf?download=1"; }
+
+function newInvoice() {
+  if (dirty && !confirm("Discard unsaved changes?")) return;
+  dirty = false;
+  location.href = "/";
+}
+
+window.addEventListener("beforeunload", e => { if (dirty) e.preventDefault(); });
+document.addEventListener("keydown", e => { if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); } });
+
+render();
+if (!locked()) $("rows").querySelector("input").focus();
+</script>
+{% endblock %}

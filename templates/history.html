@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Invoice History{% endblock %}
+{% block body %}
+<style>
+  .bar { display:flex; gap:10px; margin-bottom:14px; }
+  .bar input { max-width:340px; }
+  tr.cancelled td { color:var(--danger); }
+  tr.cancelled td.cust { text-decoration:line-through; }
+  td.acts { white-space:nowrap; text-align:right; }
+  td.acts form { display:inline; }
+  .empty { text-align:center; color:var(--muted); padding:30px; }
+</style>
+<div class="card">
+  <form class="bar" method="get">
+    <input name="q" value="{{ q }}" placeholder="Search invoice no / customer / date (dd/mm/yyyy)" autofocus>
+    <button>Search</button>
+    {% if q %}<a class="btn" href="/history">Clear</a>{% endif %}
+  </form>
+  <table>
+    <thead><tr><th>Invoice No</th><th>Date</th><th>Customer</th><th class="num">Total ({{ currency }})</th>
+      <th>Status</th><th></th></tr></thead>
+    <tbody>
+    {% for r in invoices %}
+      <tr class="{{ 'cancelled' if r.status == 'CANCELLED' }}">
+        <td><a href="/invoice/{{ r.id }}">{{ r.inv_no }}</a></td>
+        <td>{{ r.inv_date|dmy }}</td>
+        <td class="cust">{{ r.customer }}</td>
+        <td class="num">{{ r.total|money }}</td>
+        <td>{{ r.status.title() }}</td>
+        <td class="acts">
+          <a class="btn small" href="/invoice/{{ r.id }}">{{ 'View' if r.status == 'CANCELLED' else 'Open / Edit' }}</a>
+          <button class="small" onclick="printUrl('/invoice/{{ r.id }}/print')">Reprint</button>
+          <a class="btn small" href="/invoice/{{ r.id }}/pdf?download=1">PDF</a>
+          {% if r.status != 'CANCELLED' %}
+          <form method="post" action="/invoice/{{ r.id }}/cancel"
+                onsubmit="return confirm('Cancel invoice {{ r.inv_no }}?\nIt stays in history marked CANCELLED.')">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="small danger">Cancel</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">{{ 'No invoices match your search.' if q else 'No invoices yet.' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
